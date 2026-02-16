@@ -1,13 +1,2 @@
-# web_llama_cpp
-首先，你要开一个服务器，用llama-server，端口可以随便设置，建议设置为1145
-
-然后改config.js
-
-**建议使用linux/termux做服务端，必须编译服务端并运行,AI的路径必须是服务端（比如树莓派）的~/model/model.gguf**
-
-完成后打开服务端，在打开一个终端，运行
-```sh
-python -m http.server 8000
-```
-
-恭喜！🎉 大功告成！
+# jumpollamaweb
+这个项目显而易见，是通过调用ollama（localhost）的11434接口实现的，这个网页提供了最简约的用户界面，以提高工作效率。
