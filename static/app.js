@@ -1,11 +1,11 @@
-// app.js — 修复空响应问题
+// app.js — 修复版
 (function() {
     const API_BASE = '';
     const CONFIG_STORAGE_KEY = 'ollama_chat_config';
 
     // 默认配置
     const defaultConfig = {
-        model: 'qwen3-4b:latest',  // 修改为你的模型名
+        model: 'qwen3-4b:latest',
         systemPrompt: '你是一个有帮助的助手……',
         temperature: 0.8,
         top_p: 0.9,
@@ -172,12 +172,6 @@
                 if (data.models && data.models.length > 0) {
                     const modelNames = data.models.map(m => m.name);
                     console.log('可用模型:', modelNames);
-                    
-                    if (!modelNames.includes(state.config.model) && modelNames.length > 0) {
-                        state.config.model = modelNames[0];
-                        applyConfigToUI();
-                        showTemporaryMessage(`✨ 已自动选择模型: ${modelNames[0]}`, 'system');
-                    }
                 }
             } else {
                 state.connected = false;
@@ -279,10 +273,10 @@
             messages.push({ role: 'system', content: state.config.systemPrompt });
         }
         
-        // 只发送必要的消息历史，避免重复
+        // 添加对话历史
         const historyMessages = state.messages
             .filter(m => m.role !== 'system' && m.role !== 'error')
-            .slice(-10); // 只保留最近10条消息，避免上下文过长
+            .slice(-10); // 只保留最近10条
         
         historyMessages.forEach(m => {
             if (m.role === 'user' || m.role === 'assistant') {
@@ -339,7 +333,6 @@
         addMessage('assistant', '...');
 
         let accumulated = '';
-        let hasContent = false;
 
         try {
             const response = await fetch(`${API_BASE}/api/chat`, {
@@ -375,51 +368,50 @@
 
                 buffer += decoder.decode(value, { stream: true });
                 
-                // 按行分割处理
-                let lineEnd = buffer.indexOf('\n');
-                while (lineEnd !== -1) {
-                    const line = buffer.substring(0, lineEnd).trim();
-                    buffer = buffer.substring(lineEnd + 1);
+                // 处理可能的多行 JSON
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || ''; // 最后一行可能不完整
+                
+                for (const line of lines) {
+                    if (line.trim() === '') continue;
                     
-                    if (line) {
-                        try {
-                            const parsed = JSON.parse(line);
+                    try {
+                        const parsed = JSON.parse(line);
+                        
+                        // 检查是否有消息内容
+                        if (parsed.message?.content) {
+                            accumulated += parsed.message.content;
                             
-                            // 检查是否有消息内容
-                            if (parsed.message?.content) {
-                                accumulated += parsed.message.content;
-                                hasContent = true;
-                                
-                                // 更新消息
-                                state.messages[assistantMsgIndex].content = accumulated;
-                                
-                                // 更新 UI
-                                const container = elements.messageList;
-                                const msgDivs = container.children;
-                                if (msgDivs[assistantMsgIndex]) {
-                                    const bubble = msgDivs[assistantMsgIndex].querySelector('.bubble');
-                                    if (bubble) {
-                                        bubble.textContent = accumulated;
-                                        container.scrollTop = container.scrollHeight;
-                                    }
+                            // 更新消息
+                            state.messages[assistantMsgIndex].content = accumulated;
+                            
+                            // 更新 UI
+                            const container = elements.messageList;
+                            const msgDivs = container.children;
+                            if (msgDivs[assistantMsgIndex]) {
+                                const bubble = msgDivs[assistantMsgIndex].querySelector('.bubble');
+                                if (bubble) {
+                                    bubble.textContent = accumulated;
+                                    container.scrollTop = container.scrollHeight;
                                 }
                             }
-                            
-                            // 检查是否完成
-                            if (parsed.done) {
-                                console.log('生成完成', parsed);
-                            }
-                        } catch (e) {
-                            console.warn('解析行失败:', line, e);
                         }
+                        
+                        // 如果是非流式响应，直接设置内容
+                        if (parsed.response) {
+                            accumulated = parsed.response;
+                            state.messages[assistantMsgIndex].content = accumulated;
+                            renderMessages();
+                        }
+                    } catch (e) {
+                        console.warn('解析行失败:', line, e);
                     }
-                    
-                    lineEnd = buffer.indexOf('\n');
                 }
             }
             
-            // 如果没有收到任何内容，显示错误
-            if (!hasContent) {
+            // 如果最终消息还是空的，显示错误
+            if (state.messages[assistantMsgIndex]?.content === '...' || 
+                state.messages[assistantMsgIndex]?.content === '') {
                 state.messages[assistantMsgIndex].content = '[模型未返回内容]';
                 renderMessages();
             }
